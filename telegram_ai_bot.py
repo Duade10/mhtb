@@ -12,15 +12,21 @@ import httpx
 import uvicorn
 from utils.schemas import ClientMessage
 from fastapi.middleware.cors import CORSMiddleware
+from utils.db import (
+    create_tables,
+    save_session,
+    get_session,
+    get_pending_custom,
+    update_session_state,
+    delete_session,
+    purge_expired,
+)
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # Reuse a single Bot instance instead of creating a new application each time
 bot = Bot(token=BOT_TOKEN)
-
-# === Memory stores ===
-pending_custom_reply = {}     # { chat_id: { message_id: { resume_url, ... } } }
 
 # === FastAPI app ===
 app_api = FastAPI()
@@ -49,11 +55,11 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = query.message.message_id
     action = query.data
 
-    if chat_id not in pending_custom_reply or message_id not in pending_custom_reply[chat_id]:
+    session = await get_session(chat_id, message_id)
+    if not session:
         await query.edit_message_text("❌ No session found for this message.")
         return
 
-    session = pending_custom_reply[chat_id][message_id]
     resume_url = session["resume_url"]
 
     if action == "accept":
@@ -69,30 +75,26 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == "custom":
         updated_text = query.message.text + "\n\n📝 Please type your custom message now."
         await query.edit_message_text(updated_text)
-        session["awaiting_custom"] = True
+        await update_session_state(chat_id, message_id, awaiting_custom=True)
 
     # Cleanup
     if action != "custom":
-        del pending_custom_reply[chat_id][message_id]
-        if not pending_custom_reply[chat_id]:
-            del pending_custom_reply[chat_id]
+        await delete_session(chat_id, message_id)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_user.id
     message = update.message.text
 
-    if chat_id in pending_custom_reply:
-        for message_id, session in list(pending_custom_reply[chat_id].items()):
-            if session.get("awaiting_custom"):
-                resume_url = session["resume_url"]
-                print(f"💬 Custom reply from {chat_id}: {message}")
-                await update.message.reply_text("Thanks! Your message was sent.")
-                await notify_n8n(chat_id, decision="custom", resume_url=resume_url, custom_reply=message)
-                del pending_custom_reply[chat_id][message_id]
-                if not pending_custom_reply[chat_id]:
-                    del pending_custom_reply[chat_id]
-                return
+    session = await get_pending_custom(chat_id)
+    if session:
+        message_id = session["message_id"]
+        resume_url = session["resume_url"]
+        print(f"💬 Custom reply from {chat_id}: {message}")
+        await update.message.reply_text("Thanks! Your message was sent.")
+        await notify_n8n(chat_id, decision="custom", resume_url=resume_url, custom_reply=message)
+        await delete_session(chat_id, message_id)
+        return
 
     await update.message.reply_text("Please wait — we’ll send you messages here.")
 
@@ -124,17 +126,10 @@ async def notify_n8n(user_id, decision, resume_url, custom_reply=None):
 async def timeout_checker():
     while True:
         await asyncio.sleep(60)  # check every 60 seconds
-        now = asyncio.get_running_loop().time()
-
-        for chat_id, messages in list(pending_custom_reply.items()):
-            for message_id, session in list(messages.items()):
-                timestamp = session.get("timestamp")
-                if timestamp and now - timestamp > 300:  # 5 minutes
-                    print(f"⏱ Timeout for user {chat_id}")
-                    await notify_n8n(chat_id, decision="timeout", resume_url=session["resume_url"])
-                    del messages[message_id]
-            if not messages:
-                pending_custom_reply.pop(chat_id, None)
+        expired = await purge_expired()
+        for chat_id, message_id, resume_url in expired:
+            print(f"⏱ Timeout for user {chat_id}")
+            await notify_n8n(chat_id, decision="timeout", resume_url=resume_url)
 
 
 # === FastAPI endpoint to trigger message ===
@@ -160,15 +155,13 @@ async def send_to_client(data: ClientMessage):
 
     msg = await bot.send_message(chat_id=data.chat_id, text=full_text, reply_markup=reply_markup)
 
-    if data.chat_id not in pending_custom_reply:
-        pending_custom_reply[data.chat_id] = {}
-
-    pending_custom_reply[data.chat_id][msg.message_id] = {
-        "resume_url": data.resume_url,
-        "original_text": full_text,
-        "timestamp": asyncio.get_running_loop().time(),
-        "awaiting_custom": False
-    }
+    await save_session(
+        data.chat_id,
+        msg.message_id,
+        data.resume_url,
+        asyncio.get_running_loop().time(),
+        awaiting_custom=False,
+    )
 
     return {"status": "sent"}
 
@@ -195,6 +188,7 @@ def start_uvicorn():
 def main():
     import nest_asyncio
     nest_asyncio.apply()
+    asyncio.run(create_tables())
     threading.Thread(target=start_uvicorn, daemon=True).start()
     asyncio.run(start_telegram_bot())
 
