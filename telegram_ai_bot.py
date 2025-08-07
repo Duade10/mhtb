@@ -3,7 +3,7 @@ import asyncio
 import threading
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import (
     ApplicationBuilder, ContextTypes, CommandHandler,
     MessageHandler, CallbackQueryHandler, filters
@@ -16,8 +16,10 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+# Reuse a single Bot instance instead of creating a new application each time
+bot = Bot(token=BOT_TOKEN)
+
 # === Memory stores ===
-last_ai_response = {}         # chat_id → last AI response
 pending_custom_reply = {}     # { chat_id: { message_id: { resume_url, ... } } }
 
 # === FastAPI app ===
@@ -98,8 +100,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # === Send message to user ===
 async def send_telegram_message(chat_id, message, reply_markup=None):
     try:
-        app = ApplicationBuilder().token(BOT_TOKEN).build()
-        await app.bot.send_message(chat_id=chat_id, text=message, reply_markup=reply_markup)
+        await bot.send_message(chat_id=chat_id, text=message, reply_markup=reply_markup)
     except Exception as e:
         print(f"❌ Telegram error: {e}")
 
@@ -123,17 +124,17 @@ async def notify_n8n(user_id, decision, resume_url, custom_reply=None):
 async def timeout_checker():
     while True:
         await asyncio.sleep(60)  # check every 60 seconds
-        now = asyncio.get_event_loop().time()
-        to_remove = []
+        now = asyncio.get_running_loop().time()
 
-        for user_id, session in pending_custom_reply.items():
-            if "timestamp" in session and now - session["timestamp"].timestamp() > 300:  # 5 minutes
-                print(f"⏱ Timeout for user {user_id}")
-                await notify_n8n(user_id, decision="timeout", resume_url=session["resume_url"])
-                to_remove.append(user_id)
-
-        for user_id in to_remove:
-            pending_custom_reply.pop(user_id, None)
+        for chat_id, messages in list(pending_custom_reply.items()):
+            for message_id, session in list(messages.items()):
+                timestamp = session.get("timestamp")
+                if timestamp and now - timestamp > 300:  # 5 minutes
+                    print(f"⏱ Timeout for user {chat_id}")
+                    await notify_n8n(chat_id, decision="timeout", resume_url=session["resume_url"])
+                    del messages[message_id]
+            if not messages:
+                pending_custom_reply.pop(chat_id, None)
 
 
 # === FastAPI endpoint to trigger message ===
@@ -157,8 +158,7 @@ async def send_to_client(data: ClientMessage):
         f"📱 Source: {data.source}"
     )
 
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    msg = await app.bot.send_message(chat_id=data.chat_id, text=full_text, reply_markup=reply_markup)
+    msg = await bot.send_message(chat_id=data.chat_id, text=full_text, reply_markup=reply_markup)
 
     if data.chat_id not in pending_custom_reply:
         pending_custom_reply[data.chat_id] = {}
@@ -166,7 +166,7 @@ async def send_to_client(data: ClientMessage):
     pending_custom_reply[data.chat_id][msg.message_id] = {
         "resume_url": data.resume_url,
         "original_text": full_text,
-        "timestamp": asyncio.get_event_loop().time(),
+        "timestamp": asyncio.get_running_loop().time(),
         "awaiting_custom": False
     }
 
