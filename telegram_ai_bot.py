@@ -175,23 +175,23 @@ async def start_telegram_bot():
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     print("🤖 Telegram bot running...")
-    await asyncio.gather(
-        bot_app.run_polling(),
-        timeout_checker()
-    )
+
+    await bot_app.initialize()
+    await bot_app.start()
+    asyncio.create_task(timeout_checker())
+    await bot_app.updater.start_polling()
+    await bot_app.updater.idle()
 
 
 def start_uvicorn():
     uvicorn.run(app_api, host="0.0.0.0", port=8000)
 
 
-def main():
-    import nest_asyncio
-    nest_asyncio.apply()
-    asyncio.run(create_tables())
+async def main():
+    await create_tables()
     threading.Thread(target=start_uvicorn, daemon=True).start()
-    asyncio.run(start_telegram_bot())
+    await start_telegram_bot()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
