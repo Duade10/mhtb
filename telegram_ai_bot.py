@@ -180,7 +180,9 @@ async def start_telegram_bot():
     await bot_app.start()
     asyncio.create_task(timeout_checker())
     await bot_app.updater.start_polling()
-    await bot_app.updater.idle()
+    # Updater.idle() was removed in python-telegram-bot v22.
+    # Use an indefinitely waiting Event to keep the bot running.
+    await asyncio.Event().wait()
 
 
 def start_uvicorn():
