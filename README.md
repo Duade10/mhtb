@@ -13,7 +13,7 @@ This is a FastAPI + Telegram bot integration built to support a human-in-the-loo
   - ❌ Reject (send nothing)
   - 📝 Custom (admin provides a replacement)
 - Notifies n8n via a webhook with the admin’s decision
-- Automatically handles timeouts if the admin doesn’t respond
+- Sessions remain active until the admin responds
 
 ---
 
@@ -33,10 +33,12 @@ Create a `.env` file with the following:
 
 ```env
 BOT_TOKEN=your_telegram_bot_token
+```
 
 Get your token from @BotFather after creating a bot.
 
 ## ▶️ How to Run Locally
+```bash
 git clone https://github.com/yourusername/mrhost-bot.git
 cd mrhost-bot
 
@@ -46,5 +48,4 @@ source env/bin/activate   # or `env\\Scripts\\activate` on Windows
 pip install -r requirements.txt
 
 python telegram_ai_bot.py
-
-
+```

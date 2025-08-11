@@ -19,7 +19,6 @@ from utils.db import (
     get_pending_custom,
     update_session_state,
     delete_session,
-    purge_expired,
 )
 
 load_dotenv()
@@ -75,15 +74,11 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == "custom":
         updated_text = query.message.text + "\n\n📝 Please type your custom message now."
         await query.edit_message_text(updated_text)
-        # Refresh the timestamp so the session doesn't expire while the admin
-        # types a custom response. Without this, the original timestamp from
-        # when the message was first sent would trigger a timeout even though
-        # the admin is actively composing a reply.
+        # Mark this session as awaiting a custom response from the admin.
         await update_session_state(
             chat_id,
             message_id,
             awaiting_custom=True,
-            timestamp=asyncio.get_running_loop().time(),
         )
 
     # Cleanup
@@ -129,16 +124,6 @@ async def notify_n8n(user_id, decision, resume_url, custom_reply=None):
         print("✅ Notified n8n")
     except Exception as e:
         print(f"❌ Failed to notify n8n: {e}")
-
-
-# === Timeout handler ===
-async def timeout_checker():
-    while True:
-        await asyncio.sleep(60)  # check every 60 seconds
-        expired = await purge_expired()
-        for chat_id, message_id, resume_url in expired:
-            print(f"⏱ Timeout for user {chat_id}")
-            await notify_n8n(chat_id, decision="timeout", resume_url=resume_url)
 
 
 # === FastAPI endpoint to trigger message ===
@@ -187,7 +172,6 @@ async def start_telegram_bot():
 
     await bot_app.initialize()
     await bot_app.start()
-    asyncio.create_task(timeout_checker())
     await bot_app.updater.start_polling()
     # Updater.idle() was removed in python-telegram-bot v22.
     # Use an indefinitely waiting Event to keep the bot running.
