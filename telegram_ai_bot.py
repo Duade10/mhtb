@@ -75,7 +75,16 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == "custom":
         updated_text = query.message.text + "\n\n📝 Please type your custom message now."
         await query.edit_message_text(updated_text)
-        await update_session_state(chat_id, message_id, awaiting_custom=True)
+        # Refresh the timestamp so the session doesn't expire while the admin
+        # types a custom response. Without this, the original timestamp from
+        # when the message was first sent would trigger a timeout even though
+        # the admin is actively composing a reply.
+        await update_session_state(
+            chat_id,
+            message_id,
+            awaiting_custom=True,
+            timestamp=asyncio.get_running_loop().time(),
+        )
 
     # Cleanup
     if action != "custom":
