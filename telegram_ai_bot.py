@@ -74,11 +74,14 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == "custom":
         updated_text = query.message.text + "\n\n📝 Please type your custom message now."
         await query.edit_message_text(updated_text)
-        # Mark this session as awaiting a custom response from the admin.
+        # Mark this session as awaiting a custom response from the admin and
+        # record when the custom request was initiated. This timestamp is used
+        # to map the admin's next message to the correct resume.
         await update_session_state(
             chat_id,
             message_id,
             awaiting_custom=True,
+            timestamp=asyncio.get_running_loop().time(),
         )
 
     # Cleanup

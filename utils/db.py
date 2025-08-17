@@ -47,9 +47,16 @@ async def get_session(chat_id: int, message_id: int):
 
 
 async def get_pending_custom(chat_id: int):
+    """Return the most recent pending custom session for a chat."""
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
-            "SELECT message_id, resume_url FROM pending_sessions WHERE chat_id=? AND awaiting_custom=1",
+            """
+            SELECT message_id, resume_url
+            FROM pending_sessions
+            WHERE chat_id=? AND awaiting_custom=1
+            ORDER BY timestamp DESC
+            LIMIT 1
+            """,
             (chat_id,),
         )
         row = await cursor.fetchone()
