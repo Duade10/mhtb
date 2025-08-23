@@ -46,13 +46,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"✅ User started bot: {user_id}")
 
 
+async def clear_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Clear any pending custom message so the admin can handle new ones."""
+    chat_id = update.effective_user.id
+    session = await get_pending_custom(chat_id)
+    if session:
+        await delete_session(chat_id, session["message_id"])
+        await update.message.reply_text("Pending message cleared. You can reply to a new one now.")
+    else:
+        await update.message.reply_text("No pending custom message to clear.")
+
+
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
     user_id = query.from_user.id
     chat_id = query.message.chat_id
     message_id = query.message.message_id
     action = query.data
+
+    pending = await get_pending_custom(chat_id)
+    if pending and pending["message_id"] != message_id:
+        await query.answer(
+            "You already have a pending message. Use /clear to clear it before replying to something new.",
+            show_alert=True,
+        )
+        return
+
+    await query.answer()
 
     session = await get_session(chat_id, message_id)
     if not session:
@@ -165,6 +185,7 @@ async def send_to_client(data: ClientMessage):
 async def start_telegram_bot():
     bot_app = ApplicationBuilder().token(BOT_TOKEN).build()
     bot_app.add_handler(CommandHandler("start", start))
+    bot_app.add_handler(CommandHandler("clear", clear_pending))
     bot_app.add_handler(CallbackQueryHandler(handle_button))
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
