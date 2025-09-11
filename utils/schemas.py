@@ -9,3 +9,8 @@ class ClientMessage(BaseModel):
     user_message: str
     ai_response: str
     resume_url: str
+
+
+class NotificationMessage(BaseModel):
+    chat_id: int
+    notification_message: str

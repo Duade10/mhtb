@@ -10,7 +10,7 @@ from telegram.ext import (
 )
 import httpx
 import uvicorn
-from utils.schemas import ClientMessage
+from utils.schemas import ClientMessage, NotificationMessage
 from fastapi.middleware.cors import CORSMiddleware
 from utils.db import (
     create_tables,
@@ -177,6 +177,12 @@ async def send_to_client(data: ClientMessage):
         awaiting_custom=False,
     )
 
+    return {"status": "sent"}
+
+
+@app_api.post("/send-notification")
+async def send_notification(data: NotificationMessage):
+    await send_telegram_message(data.chat_id, data.notification_message)
     return {"status": "sent"}
 
 
