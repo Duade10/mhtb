@@ -57,6 +57,14 @@ async def clear_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No pending custom message to clear.")
 
 
+ACCEPT_ACTION_MESSAGES = {
+    "accept_gpt": "✅ 🤖 GPT response accepted and sent.",
+    "accept_claude": "✅ 📝 Claude response accepted and sent.",
+    "accept_gemini": "✅ 🌍 Gemini response accepted and sent.",
+    "accept_other": "✅ ✨ Other response accepted and sent.",
+}
+
+
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -81,10 +89,10 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     resume_url = session["resume_url"]
 
-    if action == "accept":
-        updated_text = query.message.text + "\n\n✅ AI response accepted and sent."
+    if action in ACCEPT_ACTION_MESSAGES:
+        updated_text = query.message.text + "\n\n" + ACCEPT_ACTION_MESSAGES[action]
         await query.edit_message_text(updated_text)
-        await notify_n8n(user_id, decision="accept", resume_url=resume_url)
+        await notify_n8n(user_id, decision=action, resume_url=resume_url)
 
     elif action == "reject":
         updated_text = query.message.text + "\n\n❌ AI response rejected. No reply will be sent."
@@ -152,10 +160,15 @@ async def send_to_client(data: ClientMessage):
     print(data)
     keyboard = [
         [
-            InlineKeyboardButton("✅ Accept", callback_data="accept"),
+            InlineKeyboardButton("🤖 GPT", callback_data="accept_gpt"),
+            InlineKeyboardButton("📝 Claude", callback_data="accept_claude"),
+            InlineKeyboardButton("🌍 Gemini", callback_data="accept_gemini"),
+            InlineKeyboardButton("✨ Other", callback_data="accept_other"),
+        ],
+        [
             InlineKeyboardButton("❌ Reject", callback_data="reject"),
-            InlineKeyboardButton("📝 Custom Message", callback_data="custom")
-        ]
+            InlineKeyboardButton("✍️ Custom", callback_data="custom"),
+        ],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
