@@ -20,6 +20,7 @@ from utils.db import (
     update_session_state,
     delete_session,
 )
+from utils.ai_response_parser import parse_ai_response_buttons
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -158,18 +159,20 @@ async def notify_n8n(user_id, decision, resume_url, custom_reply=None):
 @app_api.post("/send-to-client")
 async def send_to_client(data: ClientMessage):
     print(data)
-    keyboard = [
-        [
-            InlineKeyboardButton("🤖 GPT", callback_data="accept_gpt"),
-            InlineKeyboardButton("📝 Claude", callback_data="accept_claude"),
-            InlineKeyboardButton("🌍 Gemini", callback_data="accept_gemini"),
-            InlineKeyboardButton("✨ Other", callback_data="accept_other"),
-        ],
-        [
-            InlineKeyboardButton("❌ Reject", callback_data="reject"),
-            InlineKeyboardButton("✍️ Custom", callback_data="custom"),
-        ],
+    provider_buttons = [
+        InlineKeyboardButton(label, callback_data=callback_id)
+        for label, callback_id in parse_ai_response_buttons(data.ai_response)
     ]
+
+    keyboard = []
+    if provider_buttons:
+        keyboard.append(provider_buttons)
+
+    keyboard.append([
+        InlineKeyboardButton("❌ Reject", callback_data="reject"),
+        InlineKeyboardButton("✍️ Custom", callback_data="custom"),
+    ])
+
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     full_text = (
