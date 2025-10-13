@@ -14,6 +14,7 @@ This is a FastAPI + Telegram bot integration built to support a human-in-the-loo
   - 📝 Custom (admin provides a replacement)
 - Notifies n8n via a webhook with the admin’s decision
 - Sessions remain active until the admin responds
+- Forwards any other Telegram slash commands to a configurable webhook for custom automations
 
 ---
 
@@ -33,6 +34,7 @@ Create a `.env` file with the following:
 
 ```env
 BOT_TOKEN=your_telegram_bot_token
+SLASH_COMMAND_WEBHOOK_URL=https://example.com/webhook
 ```
 
 Get your token from @BotFather after creating a bot.
