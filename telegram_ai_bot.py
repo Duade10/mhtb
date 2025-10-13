@@ -24,6 +24,7 @@ from utils.ai_response_parser import parse_ai_response_buttons
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+SLASH_COMMAND_WEBHOOK_URL = os.getenv("SLASH_COMMAND_WEBHOOK_URL")
 
 # Reuse a single Bot instance instead of creating a new application each time
 bot = Bot(token=BOT_TOKEN)
@@ -132,6 +133,45 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Please wait — we’ll send you messages here.")
 
 
+async def forward_command_to_webhook(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+
+    command_text = update.message.text or ""
+    chat = update.effective_chat
+    user = update.effective_user
+
+    command_name, *rest = command_text.split(maxsplit=1)
+    arguments = rest[0] if rest else ""
+
+    payload = {
+        "command": command_name,
+        "arguments": arguments,
+        "chat_id": chat.id if chat else None,
+        "user": {
+            "id": user.id if user else None,
+            "username": user.username if user else None,
+            "first_name": user.first_name if user else None,
+            "last_name": user.last_name if user else None,
+        },
+    }
+
+    if not SLASH_COMMAND_WEBHOOK_URL:
+        await update.message.reply_text("No webhook configured for this command.")
+        print("⚠️ SLASH_COMMAND_WEBHOOK_URL is not set. Command was not forwarded.")
+        return
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(SLASH_COMMAND_WEBHOOK_URL, json=payload)
+            response.raise_for_status()
+        await update.message.reply_text("Command received. We'll get back to you soon.")
+        print(f"✅ Forwarded command {command_name} to webhook")
+    except httpx.HTTPError as exc:
+        await update.message.reply_text("Failed to process this command. Please try again later.")
+        print(f"❌ Failed to forward command {command_name}: {exc}")
+
+
 # === Send message to user ===
 async def send_telegram_message(chat_id, message, reply_markup=None):
     try:
@@ -208,6 +248,7 @@ async def start_telegram_bot():
     bot_app = ApplicationBuilder().token(BOT_TOKEN).build()
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CommandHandler("clear", clear_pending))
+    bot_app.add_handler(MessageHandler(filters.COMMAND, forward_command_to_webhook))
     bot_app.add_handler(CallbackQueryHandler(handle_button))
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
