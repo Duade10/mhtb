@@ -59,9 +59,9 @@ async def clear_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 ACCEPT_ACTION_MESSAGES = {
-    "accept_gpt": "✅ 🤖 GPT response accepted and sent.",
-    "accept_claude": "✅ 📝 Claude response accepted and sent.",
-    "accept_gemini": "✅ 🌍 Gemini response accepted and sent.",
+    "accept 1": "✅ Response 1 accepted and sent.",
+    "accept 2": "✅ Response 2 accepted and sent.",
+    "accept 3": "✅ Response 3 accepted and sent.",
     "accept_other": "✅ ✨ Other response accepted and sent.",
 }
 
@@ -199,9 +199,9 @@ async def notify_n8n(user_id, decision, resume_url, custom_reply=None):
 async def send_to_client(data: ClientMessage):
     print(data)
     provider_buttons = [
-        InlineKeyboardButton("🤖 GPT", callback_data="accept_gpt"),
-        InlineKeyboardButton("📝 Claude", callback_data="accept_claude"),
-        InlineKeyboardButton("🌍 Gemini", callback_data="accept_gemini"),
+        InlineKeyboardButton("1", callback_data="accept 1"),
+        InlineKeyboardButton("2", callback_data="accept 2"),
+        InlineKeyboardButton("3", callback_data="accept 3"),
         InlineKeyboardButton("✨ Other", callback_data="accept_other"),
     ]
 
