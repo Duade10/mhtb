@@ -22,8 +22,18 @@ from utils.db import (
 )
 
 load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-SLASH_COMMAND_WEBHOOK_URL = os.getenv("SLASH_COMMAND_WEBHOOK_URL")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+SLASH_COMMAND_WEBHOOK_URL = os.getenv("SLASH_COMMAND_WEBHOOK_URL", "").strip()
+
+if not BOT_TOKEN:
+    raise RuntimeError(
+        "BOT_TOKEN is not set. Please export BOT_TOKEN or add it to your .env file before starting the bot."
+    )
+
+if SLASH_COMMAND_WEBHOOK_URL:
+    print(f"🔗 Slash command webhook configured: {SLASH_COMMAND_WEBHOOK_URL}")
+else:
+    print("⚠️ No SLASH_COMMAND_WEBHOOK_URL configured. Slash commands will be acknowledged but not forwarded.")
 
 # Reuse a single Bot instance instead of creating a new application each time
 bot = Bot(token=BOT_TOKEN)
@@ -162,7 +172,15 @@ async def forward_command_to_webhook(update: Update, context: ContextTypes.DEFAU
 
     try:
         async with httpx.AsyncClient() as client:
+            print(
+                "➡️ Forwarding command to webhook",
+                {"url": SLASH_COMMAND_WEBHOOK_URL, "payload": payload},
+            )
             response = await client.post(SLASH_COMMAND_WEBHOOK_URL, json=payload)
+            print(
+                "⬅️ Webhook response",
+                {"status": response.status_code, "body": response.text},
+            )
             response.raise_for_status()
         await update.message.reply_text("Command received. We'll get back to you soon.")
         print(f"✅ Forwarded command {command_name} to webhook")
